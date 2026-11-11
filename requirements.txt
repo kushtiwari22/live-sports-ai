@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+requests
+python-dotenv
+duckduckgo-search
+fastembed
+numpy
+curl_cffi
+trafilatura
+selectolax

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sports AI Live</title>
+<style>
+  :root { --bg: #f5f6f8; --card: #ffffff; --text: #1c2430; --muted: #6b7686; --line: #e2e6ec;
+          --green: #1f9d55; --red: #e03e3e; --blue: #2f6fed; --orange: #f59e0b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #11151b; --card: #1a2029; --text: #e6eaf0; --muted: #8d98a8; --line: #2a323e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 22px 16px 10px; max-width: 960px; margin: auto; }
+  header h1 { margin: 0; font-size: 26px; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { max-width: 960px; margin: auto; padding: 0 16px 40px; }
+  h2 { font-size: 18px; margin: 28px 0 10px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .tab { padding: 8px 16px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+         border-radius: 20px; cursor: pointer; font-size: 14px; text-transform: capitalize; }
+  .tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .match { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: pointer; }
+  .match:hover { border-color: var(--blue); }
+  .match.on { border: 2px solid var(--blue); padding: 11px; }
+  .top { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .row { display: flex; justify-content: space-between; padding: 2px 0; font-weight: 600; }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--line); color: var(--muted); }
+  .badge.in { background: var(--red); color: #fff; }
+  .badge.in::before { content: "\25CF "; animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .detail { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  #scoreboard { font-size: 20px; font-weight: 700; }
+  #scoreinfo { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  #feed { margin-top: 12px; max-height: 480px; overflow-y: auto; }
+  .item { border-left: 4px solid var(--green); padding: 6px 12px; margin-bottom: 10px; background: var(--bg); border-radius: 0 8px 8px 0; }
+  .item.insight { border-color: var(--blue); }
+  .item.milestone { border: 2px solid var(--orange); background: #fff7e6; color: #3b2a05; font-weight: 700; border-radius: 8px; }
+  .item.recap, .item.pre, .item.post { border-color: #8b5cf6; }
+  .tag { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .item.milestone .tag { color: #b45309; }
+  .empty { color: var(--muted); padding: 10px 0; }
+  #chat { max-height: 360px; overflow-y: auto; }
+  .msg { padding: 8px 12px; border-radius: 10px; margin: 6px 0; white-space: pre-wrap; max-width: 90%; }
+  .msg.user { background: var(--blue); color: #fff; margin-left: auto; }
+  .msg.ai { background: var(--bg); border: 1px solid var(--line); }
+  details { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .askrow { display: flex; gap: 8px; margin-top: 10px; }
+  input { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 15px; }
+  button.send { background: var(--blue); color: #fff; border: 0; border-radius: 8px; padding: 0 20px; cursor: pointer; font-size: 15px; }
+  button.send:disabled { opacity: .5; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sports AI Live</h1>
+  <p>Live matches, AI commentary and a sports chatbot</p>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<main>
+  <h2>Matches</h2>
+  <div class="grid" id="matches"><div class="empty">Loading matches...</div></div>
+
+  <h2>Live commentary</h2>
+  <div class="panel" id="commentary">
+    <div id="scoreboard">Pick a match above</div>
+    <div id="scoreinfo"></div>
+    <div id="feed"><div class="empty">Click any match to see its commentary here.</div></div>
+  </div>
+
+  <h2>Ask the AI</h2>
+  <div class="panel">
+    <div id="chat"><div class="empty">Ask about any current or past match, player or record.</div></div>
+    <div class="askrow">
+      <input id="question" placeholder="e.g. Who is winning? How did Arsenal do last night?">
+      <button class="send" id="sendbtn" onclick="ask()">Ask</button>
+    </div>
+    <div class="hint" id="hint">No match selected: the AI will search by itself.</div>
+  </div>
+</main>
+
+<script>
+var SPORTS = ["football", "cricket", "basketball", "tennis"];
+var sport = "football";
+var matchSport = null, matchId = null, shown = 0, history = [];
+
+function esc(t) {
+  return String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function el(id) { return document.getElementById(id); }
+
+function drawTabs() {
+  el("tabs").innerHTML = SPORTS.map(function (s) {
+    return "<button class='tab " + (s == sport ? "on" : "") + "' data-sport='" + s + "'>" + s + "</button>";
+  }).join("");
+}
+
+el("tabs").addEventListener("click", function (e) {
+  var s = e.target.getAttribute("data-sport");
+  if (s) { sport = s; drawTabs(); loadMatches(); }
+});
+
+async function loadMatches() {
+  var list;
+  try {
+    list = await (await fetch("/api/matches?sport=" + sport)).json();
+  } catch (e) {
+    el("matches").innerHTML = "<div class='empty'>Could not load matches.</div>";
+    return;
+  }
+  if (!list.length) {
+    el("matches").innerHTML = "<div class='empty'>No matches right now for " + sport + ".</div>";
+    return;
+  }
+  var label = { in: "LIVE", pre: "UPCOMING", post: "FINISHED" };
+  el("matches").innerHTML = list.map(function (m) {
+    var on = (m.id == matchId && m.sport == matchSport) ? "on" : "";
+    return "<div class='match " + on + "' data-id='" + esc(m.id) + "'>" +
+      "<div class='top'><span class='badge " + esc(m.state) + "'>" + (label[m.state] || m.state) + "</span><span>" + esc(m.league) + "</span></div>" +
+      "<div class='row'><span>" + esc(m.home) + "</span><span>" + esc(m.home_score) + "</span></div>" +
+      "<div class='row'><span>" + esc(m.away) + "</span><span>" + esc(m.away_score) + "</span></div>" +
+      "<div class='detail'>" + esc(m.detail) + "</div></div>";
+  }).join("");
+}
+
+el("matches").addEventListener("click", function (e) {
+  var card = e.target.closest(".match");
+  if (card) openMatch(card.getAttribute("data-id"));
+});
+
+function openMatch(id) {
+  matchSport = sport; matchId = id; shown = 0;
+  el("scoreboard").textContent = "Loading match...";
+  el("scoreinfo").textContent = "";
+  el("feed").innerHTML = "<div class='empty'>Starting commentary. The first lines take a few seconds.</div>";
+  el("hint").textContent = "The AI will use the selected match as context.";
+  el("commentary").scrollIntoView({ behavior: "smooth" });
+  loadMatches();
+  refreshFeed();
+}
+
+async function refreshFeed() {
+  if (!matchId) return;
+  var url = "/api/commentary?sport=" + matchSport + "&match_id=" + encodeURIComponent(matchId) + "&since=" + shown;
+  var data;
+  try {
+    data = await (await fetch(url)).json();
+  } catch (e) { return; }
+  var m = data.match;
+  if (m && m.home) {
+    el("scoreboard").textContent = m.home + " " + (m.home_score || "") + "  -  " + (m.away_score || "") + " " + m.away;
+    el("scoreinfo").textContent = (m.league || "") + " | " + (m.detail || "");
+  }
+  if (shown == 0 && data.feed.length > 0) el("feed").innerHTML = "";
+  var tags = { milestone: "Milestone", insight: "Did you know", event: "", "story so far": "Story so far", pre: "Preview", post: "Recap" };
+  data.feed.forEach(function (item) {
+    var tag = tags[item.kind] != null ? tags[item.kind] : item.kind;
+    var html = "<div class='item " + esc(item.kind) + "'><div class='tag'>" + esc(item.clock) + " " + esc(tag) + "</div>" + esc(item.text) + "</div>";
+    el("feed").insertAdjacentHTML("afterbegin", html);
+  });
+  shown = data.total;
+}
+
+function addMessage(kind, text, extra) {
+  if (el("chat").querySelector(".empty")) el("chat").innerHTML = "";
+  el("chat").insertAdjacentHTML("beforeend", "<div class='msg " + kind + "'>" + esc(text) + (extra || "") + "</div>");
+  el("chat").scrollTop = el("chat").scrollHeight;
+}
+
+async function ask() {
+  var q = el("question").value.trim();
+  if (!q) return;
+  el("question").value = "";
+  el("sendbtn").disabled = true;
+  addMessage("user", q);
+  addMessage("ai", "Thinking...");
+  var thinking = el("chat").lastChild;
+  try {
+    var res = await fetch("/api/ask", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, history: history, sport: matchId ? matchSport : null, match_id: matchId })
+    });
+    var data = await res.json();
+    var answer = data.answer || data.detail || "Something went wrong.";
+    var extra = "";
+    if (data.steps) {
+      extra = "<details><summary>How the AI got this</summary>" + esc(data.steps.join("\n")) +
+              (data.sources && data.sources.length ? "\n\nSources:\n" + esc(data.sources.join("\n")) : "") + "</details>";
+    }
+    thinking.remove();
+    addMessage("ai", answer, extra);
+    history.push("User: " + q);
+    history.push("AI: " + answer);
+  } catch (e) {
+    thinking.remove();
+    addMessage("ai", "Could not reach the server.");
+  }
+  el("sendbtn").disabled = false;
+}
+
+el("question").addEventListener("keydown", function (e) { if (e.key == "Enter") ask(); });
+
+drawTabs();
+loadMatches();
+setInterval(loadMatches, 30000);
+setInterval(refreshFeed, 8000);
+</script>
+</body>
+</html>
